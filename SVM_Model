@@ -1,0 +1,106 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+from matplotlib.font_manager import FontProperties
+from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.metrics import classification_report, confusion_matrix, ConfusionMatrixDisplay, accuracy_score
+from sklearn.svm import SVC
+from mlxtend.frequent_patterns import apriori, association_rules
+from mlxtend.preprocessing import TransactionEncoder
+
+# 中文字型設定
+plt.rcParams['font.sans-serif'] = ['Microsoft JhengHei']
+plt.rcParams['axes.unicode_minus'] = False
+
+# 1. 讀取資料
+df = pd.read_csv('your_data.csv, encoding='big5')
+
+# 2. 篩選數位素養在合理範圍內（0~10）
+df = df[df['數位素養'].between(0, 10)]
+
+# 3. 地區分類
+def map_region(code):
+    if code in [1, 2, 3, 7, 8, 18, 19]:
+        return '北部'
+    elif code in [4, 9, 10, 11, 12]:
+        return '中部'
+    elif code in [5, 6, 13, 14, 20]:
+        return '南部'
+    elif code in [16, 17]:
+        return '東部'
+    else:
+        return '其他'
+
+df['地區'] = df['v1'].apply(map_region)
+
+# 4. 分群標籤處理（0=低，1=高），排除中間群體
+df_extreme = df[(df['數位素養'] <= 4) | (df['數位素養'] >= 7)].copy()
+df_extreme['素養分類'] = df_extreme['數位素養'].apply(lambda x: 1 if x >= 7 else 0)
+
+# 5. 特徵欄位
+feature_cols = [yourfeature]
+
+# 6. 移除 98/99 異常值
+for col in feature_cols:
+    df_extreme = df_extreme[~df_extreme[col].isin([98, 99])]
+
+# 7. 訓練集切分
+X = df_extreme[feature_cols]
+y = df_extreme['素養分類']
+X_train, X_test, y_train, y_test = train_test_split(X, y, stratify=y, test_size=0.3, random_state=42)
+
+# 8. 超參數搜尋（GridSearchCV）
+param_grid = {
+    'C': [0.1, 1, 10],
+    'gamma': [0.01, 0.1, 1],
+    'kernel': ['rbf']
+}
+
+grid = GridSearchCV(SVC(probability=True), param_grid, cv=5, scoring='accuracy', n_jobs=-1)
+grid.fit(X_train, y_train)
+
+# 9. 使用最佳模型
+svm_clf = grid.best_estimator_
+print(f"\n✅ 最佳參數組合：{grid.best_params_}")
+
+# 10. 模型預測與評估
+y_pred = svm_clf.predict(X_test)
+accuracy = accuracy_score(y_test, y_pred)
+print("\n📊 SVM 最佳模型在極端分類上的準確率：{:.2f}%".format(accuracy * 100))
+
+# 11. 關聯規則分析（依地區 + 素養群體）
+def encode_for_apriori(dataframe, columns):
+    df_bin = dataframe[columns].copy()
+    for col in df_bin.columns:
+        df_bin[col] = df_bin[col].astype(str)
+        df_bin[col] = col + '_' + df_bin[col]
+    records = df_bin.values.tolist()
+    te = TransactionEncoder()
+    te_ary = te.fit(records).transform(records)
+    return pd.DataFrame(te_ary, columns=te.columns_)
+
+regions = ['北部', '中部', '南部', '東部']
+for region in regions:
+    for label, label_name in zip([0, 1], ['低', '高']):
+        subset = df_extreme[(df_extreme['地區'] == region) & (df_extreme['素養分類'] == label)]
+        if not subset.empty:
+            print(f"\n正在處理：{region} - {label_name} 數位素養...")
+            encoded = encode_for_apriori(subset, feature_cols)
+            freq_items = apriori(encoded, min_support=0.3, use_colnames=True)
+            rules = association_rules(freq_items, metric='confidence', min_threshold=0.8)
+            rules = rules[
+                (rules['lift'] >= 1.1) &
+                (rules['antecedents'].apply(lambda x: len(x) >= 3)) &
+                (rules['consequents'].apply(lambda x: len(x) >= 2))
+            ]
+            print(f"\n📌 {region} 地區 - {label_name} 數位素養 的關聯規則（前10條）：")
+            print(rules[['antecedents', 'consequents', 'support', 'confidence', 'lift']].head(10))
+
+# 12. 混淆矩陣與分類報告
+print("\n🔍 分類報告（Classification Report）：")
+print(classification_report(y_test, y_pred, target_names=["低數位素養", "高數位素養"]))
+
+cm = confusion_matrix(y_test, y_pred)
+disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=["低數位素養", "高數位素養"])
+disp.plot(cmap=plt.cm.Blues)
+plt.title("📌 SVM 最佳模型分類混淆矩陣")
+plt.show()
