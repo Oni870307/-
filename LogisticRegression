@@ -13,7 +13,7 @@ plt.rcParams['font.sans-serif'] = ['Microsoft JhengHei']
 plt.rcParams['axes.unicode_minus'] = False
 
 # 1. 讀取資料
-df = pd.read_csv(r'd:\高雄科技大學智慧商務研究所\000_Wei個人區\個人論文參考文獻\數發部文獻資料\112年度\data112_關聯.csv', encoding='big5')
+df = pd.read_csv('your_data.csv, encoding='big5')
 
 # 2. 篩選數位素養在合理範圍內（0~10）
 df = df[df['數位素養'].between(0, 10)]
@@ -38,13 +38,7 @@ df_extreme = df[(df['數位素養'] <= 4) | (df['數位素養'] >= 7)].copy()
 df_extreme['素養分類'] = df_extreme['數位素養'].apply(lambda x: 1 if x >= 7 else 0)
 
 # 5. 特徵欄位
-feature_cols = [
-    "一個禮拜上網天數", "使用電子郵件", "利用網路搜尋商品或服務", "從事上網購物、付費APP、訂餐、訂房等", "上網販售商品或服務",
-    "下載遊戲以外的軟體", "搜尋健康相關資訊", "使用網路或行動銀行", "使用行動支付", "使用即時通訊",
-    "參與線上課程", "觀看影片、聽音樂或玩遊戲", "使用剪輯軟體編輯圖片或影片", "使用即時通訊軟體或社群網站",
-    "在社群媒體PO文、張貼照片或影片", "使用數位工具從事繪圖、出版或創作", "日常幸福指數", "教育程度",
-    "查閱維基百科或其他共同編輯的網路百科", "透過網路處理工作訊息","年齡層"
-]
+feature_cols = [yourfeature]
 
 # 6. 移除 98/99 異常值
 for col in feature_cols:
